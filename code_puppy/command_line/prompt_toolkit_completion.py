@@ -789,6 +789,77 @@ async def get_input_with_combined_completion(
     except Exception:
         pass
 
+    # Shift+Enter for newline. This is the intuitive keystroke every chat
+    # UI (Slack, Discord, iMessage, ChatGPT, etc.) uses to insert a line
+    # break without submitting, so users reach for it reflexively.
+    #
+    # Terminal reality check: most terminals send the *same byte* (\r) for
+    # Enter and Shift+Enter, so the two are physically indistinguishable
+    # at the software level. Only terminals that emit an extended
+    # keyboard protocol send a distinct sequence for Shift+Enter:
+    #
+    #   * CSI-u / kitty keyboard protocol  -> ESC [ 1 3 ; 2 u
+    #     (kitty, WezTerm, foot, Ghostty, iTerm2 with 'Report modifiers
+    #      using CSI u' enabled, xterm with formatOtherKeys=1)
+    #   * xterm modifyOtherKeys=2         -> ESC [ 2 7 ; 2 ; 1 3 ~
+    #     (older xterm-family opt-in)
+    #
+    # We register both encodings so users of well-configured terminals
+    # get real Shift+Enter. For everyone else, Ctrl+J and Alt+Enter
+    # (below) are the universal fallbacks — they work in every terminal
+    # ever made because the OS translates them independently of the
+    # Enter key.
+    def _insert_newline(event):
+        event.app.current_buffer.insert_text("\n")
+
+    # CSI-u form: ESC [ 1 3 ; 2 u
+    try:
+        bindings.add(
+            Keys.Escape, "[", "1", "3", ";", "2", "u", eager=True
+        )(_insert_newline)
+    except Exception:
+        pass
+
+    # xterm modifyOtherKeys form: ESC [ 2 7 ; 2 ; 1 3 ~
+    try:
+        bindings.add(
+            Keys.Escape,
+            "[",
+            "2",
+            "7",
+            ";",
+            "2",
+            ";",
+            "1",
+            "3",
+            "~",
+            eager=True,
+        )(_insert_newline)
+    except Exception:
+        pass
+
+    # Symbolic name in case a future prompt_toolkit version learns it.
+    try:
+        bindings.add("s-enter", eager=True)(_insert_newline)
+    except Exception:
+        pass
+
+    # Alt+Enter (a.k.a. Meta+Enter / Option+Enter on macOS) is the
+    # universal fallback: every terminal sends this as ESC + CR, which
+    # prompt_toolkit already recognizes. No terminal configuration
+    # required. Documented in the /help output so users know it exists
+    # when Shift+Enter proves to be unreliable on their terminal.
+    try:
+        bindings.add(Keys.Escape, Keys.ControlM, eager=True)(_insert_newline)
+    except Exception:
+        pass
+    # Some terminals (notably iTerm2's default Option+Enter mapping)
+    # send ESC + LF instead of ESC + CR. Cover both.
+    try:
+        bindings.add(Keys.Escape, Keys.ControlJ, eager=True)(_insert_newline)
+    except Exception:
+        pass
+
     # Enter behavior depends on multiline mode AND completion-menu state.
     # Priority order:
     #   1. If the completion menu is open with a highlighted item, just

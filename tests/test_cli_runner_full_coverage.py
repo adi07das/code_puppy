@@ -457,7 +457,10 @@ class TestInteractiveMode:
         )
 
         messages = [call.args[0] for call in emit_system_message.call_args_list]
-        assert any("newline: Shift+Enter" in message for message in messages)
+        # The startup blurb must document at least one way to insert a
+        # newline mid-prompt. Shift+Enter is the reflex users reach for,
+        # so require that specific keystroke to be mentioned.
+        assert any("Shift+Enter" in message for message in messages)
         assert any(
             "Ctrl+X Ctrl+E to open $EDITOR (Notepad on Windows)" in message
             for message in messages

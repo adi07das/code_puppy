@@ -706,10 +706,28 @@ class TestKeyBindings:
         return captured.get("key_bindings")
 
     def _find_handler(self, bindings, key_name):
-        """Find a handler in bindings by key name."""
+        """Find a handler in bindings by key name.
+
+        Prefers *single-key* bindings so a lookup for ``"c-m"`` returns the
+        plain-Enter handler rather than an unrelated multi-key sequence
+        like ``(Escape, ControlM)`` that happens to contain ``c-m`` in
+        its stringified tuple. Falls back to substring match across all
+        bindings for backward compatibility with older tests that look up
+        multi-key combos by name.
+        """
+        # First pass: single-key bindings whose one key stringifies to
+        # contain the query. This is the common case.
         for binding in bindings.bindings:
-            keys_str = str(binding.keys)
-            if key_name in keys_str:
+            if len(binding.keys) == 1:
+                key = binding.keys[0]
+                # Keys enum members expose the shortcut as .value ('c-m',
+                # 'escape', etc.); plain strings are their own value.
+                key_value = getattr(key, "value", key)
+                if key_name == key_value or key_name in str(key_value):
+                    return binding.handler
+        # Fallback: original substring-across-tuple behavior.
+        for binding in bindings.bindings:
+            if key_name in str(binding.keys):
                 return binding.handler
         return None
 
